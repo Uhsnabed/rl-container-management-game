@@ -1,82 +1,114 @@
-# Curriculum PPO + Monte Carlo Collision Model for Container Management
+# RL Container Management Using PPO and Collision Prediction
 
-**Paper basis:** A. Pendyala and T. Glasmachers, *Curriculum RL meets Monte Carlo Planning: Optimization of a Real World Container Management Problem*, arXiv:2503.17194v1 (21 March 2025), https://arxiv.org/abs/2503.17194.
+**Reference paper:** A. Pendyala and T. Glasmachers, *Curriculum RL meets Monte Carlo Planning: Optimization of a Real World Container Management Problem* (2025). [Read the paper](https://arxiv.org/abs/2503.17194).
 
-This project implements a **small educational approximation of the paper's core approach**. It is not the authors' original ContainerGym environment and it does not reproduce their published numerical results.
+This project is based on the paper above. The main idea is to use reinforcement learning to decide when a container should be emptied, while trying to avoid overflow and make better use of the processing unit. I implemented a smaller version of the problem to understand the approach and test it in a working simulation. It is inspired by the paper, but it is not the original ContainerGym environment or an exact reproduction of the reported experiments.
 
-## What is implemented
+## What the project does
 
-1. **Container MDP** (`waste_sorting_env.py`): discrete actions `0=no-op`, `i+1=empty container i`; stochastic filling; a shared processing-unit busy counter; overflow penalty/termination; target peaks at 0.35 and 0.68 after normalizing the paper's 0–40 volume scale to 0–1.
-2. **PPO actor–critic** (`ppo_numpy.py`): separate neural actor and critic, PyTorch backpropagation, Adam, clipped PPO policy objective, clipped value objective, entropy regularization, GAE, normalized advantages, minibatches, and gradient clipping. `loss.backward()` computes gradients and `optimizer.step()` updates weights.
-3. **Three-phase reward curriculum**: phase 1 rewards a Gaussian centered at the higher peak; phase 2 uses Gaussian rewards around both lower and higher peaks; phase 3 gives reward 1 only within the paper's ±1 physical-unit tolerance around either peak, and 0 otherwise. No-op reward is 0; invalid empty attempts are penalized.
-4. **Offline Monte Carlo collision model** (`collision_model.py`): simulated pairwise fill trajectories produce binary collision labels; an XGBoost classifier is trained offline (scikit-learn histogram-gradient-boosting fallback if XGBoost is unavailable). At inference, when PPO proposes no-op and the PU is idle, predicted pairwise risk can override no-op to empty the most at-risk near-peak container. An empty attempt while the PU is busy is never used as an override because the paper's MDP says such requests are lost.
-5. **Evaluation**: PPO with curriculum, vanilla PPO, collision-augmented PPO, a safety heuristic, and random policy are compared using the same evaluation seed families. Metrics include return, throughput, overflow violations, collision timesteps, energy/action count, press idle fraction, peak deviation, and number of overrides.
+The simulation has multiple containers whose fill levels increase over time. A shared processing unit empties one container at a time and remains busy for a certain number of steps after an operation. The agent has to decide whether to wait or empty a particular container.
 
-## Play the simulation as a terminal game
+The project has a few main parts:
 
-The environment is a step-by-step RL game/simulation; graphics are not required. You can play it yourself or watch an agent:
+- **Simulation environment (`waste_sorting_env.py`):** Handles container filling, available actions, processing-unit status, rewards and overflow.
+- **PPO agent (`ppo_numpy.py`):** Uses an actor–critic network to learn which action to take. Training uses the clipped PPO objective, advantage estimation, entropy regularization and gradient updates through PyTorch.
+- **Reward curriculum:** The reward changes over three phases. It starts with one preferred fill level, then introduces two target levels, and finally rewards emptying within a defined tolerance of either target.
+- **Collision prediction (`collision_model.py`):** Monte Carlo simulations generate pairwise examples for training a classifier. XGBoost is used when available, with a scikit-learn fallback. During inference, the model can override a no-op action when the predicted collision risk is high and the processing unit is idle.
+- **Experiments (`run_experiments.py`):** Trains and compares the PPO approaches with a vanilla PPO agent, a collision-aware agent, a safety heuristic and a random policy.
 
-```bash
-# Choose each action yourself
-python play_game.py --mode manual
+The action `0` means no-op, while actions `1` through `N` select the corresponding container for emptying. If the processing unit is busy, an emptying request cannot be processed. An overflow ends the episode.
 
-# Watch the saved PPO agent play
-python play_game.py --mode ppo --checkpoint curriculum_ppo_seed7.pt
+## Running the simulation
 
-# Watch a random baseline
-python play_game.py --mode random
-```
+Python 3.10 or later is recommended. A CPU is sufficient for this version.
 
-Each turn displays container fill levels, processing-unit status, the chosen action, reward, throughput, overflow events, and collision timesteps. In manual mode, enter `0` to wait or `1..N` to empty a container; enter `q` to stop.
-
-## Run the project
-
-Python 3.10+ is recommended. CPU is sufficient.
+First, install the required packages:
 
 ```bash
 python -m pip install -r requirements.txt
+```
+
+To play the simulation yourself in the terminal:
+
+```bash
+python play_game.py --mode manual
+```
+
+Enter `0` to wait or a number from `1` to `N` to empty a container. Enter `q` to stop.
+
+You can also run a random policy:
+
+```bash
+python play_game.py --mode random
+```
+
+To watch the trained PPO policy, use the saved checkpoint:
+
+```bash
+python play_game.py --mode ppo --checkpoint curriculum_ppo_seed7.pt
+```
+
+The checkpoint needs to be present in the project directory.
+
+## Training and testing
+
+Run the tests with:
+
+```bash
 pytest -q
+```
+
+To train the models and run the experiments:
+
+```bash
 python run_experiments.py
 ```
 
-The script trains PPO variants using seeds `7, 19, 43`, fits the collision model on offline Monte Carlo data, saves checkpoints and model, and writes:
+The experiment script uses three training seeds (`7`, `19` and `43`), trains the PPO variants, generates Monte Carlo data for the collision model and evaluates the different approaches.
 
-- `results_by_seed.csv` — per-seed evaluation metrics
-- `summary.json` — averages across the three seeds
-- `training_history.csv` — training returns, throughput, violations and PPO losses
-- `collision_model.pkl` and `collision_model_backend.txt`
-- `curriculum_ppo_seed*.pt` and `vanilla_ppo_seed*.pt`
-- `throughput_comparison.png` and `safety_comparison.png` — summary charts
+The generated files include:
 
-## Current run results (our simulator, not the paper's results)
+- `results_by_seed.csv` – results for individual seeds
+- `summary.json` – average evaluation metrics
+- `training_history.csv` – training statistics
+- `collision_model.pkl` and `collision_model_backend.txt` – saved collision model and backend information
+- `curriculum_ppo_seed*.pt` and `vanilla_ppo_seed*.pt` – PPO checkpoints
+- `throughput_comparison.png` and `safety_comparison.png` – comparison charts
 
-Results are averages across 3 training seeds and 5 evaluation episodes per seed. Throughput is total normalized volume emptied in one episode. Violations and collisions are counts, not percentages.
+## Results from the current run
 
-| Method | Mean return | Throughput | Overflow violations | Collision timesteps | Press idle fraction | Overrides |
+The following values are averages over three training seeds and five evaluation episodes per seed. Throughput is the total normalized volume emptied per episode. Overflow violations and collision timesteps are reported as counts, not percentages.
+
+| Method | Mean return | Throughput | Overflow violations | Collision timesteps | PU idle fraction | Overrides |
 |---|---:|---:|---:|---:|---:|---:|
 | Curriculum PPO | -0.8333 | 6.9896 | 0.3333 | 0.3333 | 0.2277 | 0.0000 |
 | Vanilla PPO | -1.0000 | 6.2397 | 0.4000 | 0.0000 | 0.4780 | 0.0000 |
 | Curriculum PPO + collision model | -0.9000 | 6.9459 | 0.3333 | 0.2667 | 0.2240 | 0.1333 |
 | Safety heuristic | 5.7333 | 9.7407 | 0.0000 | 0.0000 | 0.1900 | 0.0000 |
-| Random | -8.9333 | 4.1519 | 0.9333 | 0.1333 | 0.1265 | 0.0000 |
+| Random policy | -8.9333 | 4.1519 | 0.9333 | 0.1333 | 0.1265 | 0.0000 |
 
-**Interpretation:** In this run, curriculum PPO has somewhat higher throughput than vanilla PPO. The collision model lowers mean collision timesteps from 0.3333 to 0.2667 without reducing throughput materially, but does not reduce overflow violations. The safety heuristic is the strongest baseline in these short experiments. Do not claim the learned policy is superior or that the paper's results were reproduced.
+In this run, curriculum PPO achieved slightly higher throughput than vanilla PPO. Adding the collision model reduced the average collision timesteps from `0.3333` to `0.2667`, with little change in throughput. However, it did not reduce overflow violations. The safety heuristic performed best on these particular metrics, so the results do not show that the learned policy is better than every baseline.
 
-## Differences from the paper (be transparent in report/viva)
+These numbers come from this implementation and its selected settings. They are not the results reported in the research paper, and they may change with different random seeds or training settings.
 
-The paper evaluates 7–12 containers per processing unit, 600 timesteps per episode, 15 independent training seeds and 5 evaluation rollouts per seed, and reports a pairwise collision dataset generated using two million repetitions. This teaching implementation is limited to 1–3 containers, uses shorter episodes, three training seeds, a much smaller Monte Carlo dataset (10,000 pairwise samples), and simplified normalized fill/processing dynamics. The reward curriculum and PPO-CL-CM architecture are implemented in simplified form; the exact original environment, distributions, hyperparameter schedule, full configuration sweep, and experimental scale are not reproduced.
+## How this differs from the paper
 
-The reported numbers above are generated by the included code in this environment. They are not copied from the paper. RL metrics vary by seed and hyperparameters.
+The original paper evaluates configurations with 7–12 containers, episodes of 600 timesteps, 15 training seeds and five evaluation rollouts per seed. It also describes a collision dataset based on two million repetitions.
 
-## Files
+This implementation is smaller: it supports 1–3 containers, uses shorter episodes and three training seeds, and generates a much smaller Monte Carlo dataset of 10,000 pairwise samples. The container dynamics, reward setup and collision model are simplified as well.
 
-- `waste_sorting_env.py`: MDP, stochastic fill dynamics, reward curriculum and safety metrics.
-- `ppo_numpy.py`: PyTorch PPO actor–critic implementation (legacy filename retained for compatibility).
-- `collision_model.py`: offline Monte Carlo pairwise collision dataset, classifier and inference override.
-- `run_experiments.py`: training/evaluation pipeline and baselines.
-- `test_project.py`: automated tests for curriculum, backpropagation, action semantics, safety and collision override.
-- `CODE_WALKTHROUGH.md`: beginner-friendly code explanation.
+The aim was to build and test the main ideas in a manageable simulation, rather than reproduce the original environment or its numerical results exactly.
+
+## Main files
+
+- `waste_sorting_env.py` – simulation environment and reward logic
+- `ppo_numpy.py` – PPO actor–critic agent
+- `collision_model.py` – Monte Carlo data generation and collision prediction
+- `run_experiments.py` – training, evaluation and baseline comparisons
+- `play_game.py` – terminal simulation
+- `test_project.py` – automated tests
+- `requirements.txt` – package dependencies
 
 ## Reference
 
-Pendyala, A. & Glasmachers, T. (2025). *Curriculum RL meets Monte Carlo Planning: Optimization of a Real World Container Management Problem*. arXiv:2503.17194v1. https://arxiv.org/abs/2503.17194
+Pendyala, A. and Glasmachers, T. (2025). *Curriculum RL meets Monte Carlo Planning: Optimization of a Real World Container Management Problem*. arXiv:2503.17194v1. https://arxiv.org/abs/2503.17194
