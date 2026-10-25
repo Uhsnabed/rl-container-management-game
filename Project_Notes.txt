@@ -1,0 +1,43 @@
+RL Container Management Project Notes
+
+Project overview
+This project is a small reinforcement learning simulation for deciding when to empty containers. Each container has a fill level that increases over time. The processing unit (PU) can empty one container at a time, so actions attempted while it is busy do not succeed. If a container goes beyond its capacity, the episode records an overflow violation and ends.
+
+Main files
+- waste_sorting_env.py: Defines the simulation, observations, actions, rewards, and episode statistics.
+- ppo_numpy.py: Contains the PPO actor-critic agent. The policy selects actions and the value network estimates the value of a state.
+- run_experiments.py: Trains the PPO variants, runs baseline evaluations, and saves experiment results.
+- collision_model.py: Generates pairwise collision examples using Monte Carlo rollouts, trains the classifier, and provides the inference-time action override.
+- play_game.py: Lets a user interact with the simulation in the terminal, watch the PPO agent, or run a random agent.
+- test_project.py: Contains tests for important project behaviour.
+- requirements.txt: Lists the Python packages needed to run the project.
+- README.md: Setup and usage instructions.
+
+How the simulation works
+At each step, the agent receives an observation of the container fill levels and the processing-unit state. It chooses action 0 to wait, or an action corresponding to a container to empty. The environment applies the action, updates the processing-unit busy time, increases container fill levels, calculates the reward, and checks for overflow. The episode ends when the time limit is reached or an overflow occurs.
+
+Curriculum learning
+Training can use three reward phases. The first phase rewards emptying near a single target peak. The second phase introduces two target peaks. The third phase gives a reward when the emptied volume is within the defined tolerance of either target. This makes the reward objective more challenging over training.
+
+Collision prediction
+The collision model is trained separately from simulated pairwise fill trajectories. At inference time, it checks pairs of containers that are close to the higher target. If the PPO policy proposes waiting and the estimated risk is above the configured threshold, the override can choose a container-emptying action instead. This is a simplified model of the method described in the reference paper.
+
+Running the project
+Install the dependencies with:
+    pip install -r requirements.txt
+
+Start the interactive terminal simulation:
+    python play_game.py --mode manual
+
+Watch the saved PPO policy, if the checkpoint file is present:
+    python play_game.py --mode ppo --checkpoint curriculum_ppo_seed7.pt
+
+Run the random policy:
+    python play_game.py --mode random
+
+Run the tests:
+    python -m unittest test_project.py
+
+Run the experiment script:
+    python run_experiments.py
+

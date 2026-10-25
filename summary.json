@@ -1,0 +1,52 @@
+{
+  "Curriculum PPO": {
+    "return_": -0.8333,
+    "throughput": 6.9896,
+    "violations": 0.3333,
+    "collisions": 0.3333,
+    "energy": 14.1333,
+    "press_idle_fraction": 0.2277,
+    "mean_peak_deviation": 0.1024,
+    "overrides": 0.0
+  },
+  "Vanilla PPO": {
+    "return_": -1.0,
+    "throughput": 6.2397,
+    "violations": 0.4,
+    "collisions": 0.0,
+    "energy": 13.8667,
+    "press_idle_fraction": 0.478,
+    "mean_peak_deviation": 0.0572,
+    "overrides": 0.0
+  },
+  "Safety heuristic": {
+    "return_": 5.7333,
+    "throughput": 9.7407,
+    "violations": 0.0,
+    "collisions": 0.0,
+    "energy": 22.6,
+    "press_idle_fraction": 0.19,
+    "mean_peak_deviation": 0.0636,
+    "overrides": 0.0
+  },
+  "Random": {
+    "return_": -8.9333,
+    "throughput": 4.1519,
+    "violations": 0.9333,
+    "collisions": 0.1333,
+    "energy": 12.3333,
+    "press_idle_fraction": 0.1265,
+    "mean_peak_deviation": 0.1338,
+    "overrides": 0.0
+  },
+  "Curriculum PPO + collision model": {
+    "return_": -0.9,
+    "throughput": 6.9459,
+    "violations": 0.3333,
+    "collisions": 0.2667,
+    "energy": 14.1333,
+    "press_idle_fraction": 0.224,
+    "mean_peak_deviation": 0.1016,
+    "overrides": 0.1333
+  }
+}
